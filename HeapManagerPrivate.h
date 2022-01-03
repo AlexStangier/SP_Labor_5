@@ -1,6 +1,13 @@
 #ifndef LAB5_HEAPMANAGERPRIVATE_H
 #define LAB5_HEAPMANAGERPRIVATE_H
 
+#include <stdio.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/sem.h>
+#include <stdlib.h>
+#include <unistd.h>
+
 #define SHMKEY          1337
 #define SEMKEY          1338
 #define SEGMENTS        10000

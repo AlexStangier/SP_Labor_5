@@ -15,8 +15,8 @@ void error_and_die() {
 int heap_init(key_t key, int syn) {
     atexit(error_and_die);
     int shmid;
-    struct managedheap mheap;
-    printf("%lu-\n", sizeof(mheap));
+    //mheap mheap;
+    printf("%lu\n", sizeof(mheap));
 
     //use semaphore
     if (syn == TRUE) {

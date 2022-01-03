@@ -1,13 +1,6 @@
 #ifndef HeapManager
 #define HeapManager
 
-#include <stdio.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <sys/sem.h>
-#include <stdlib.h>
-#include <unistd.h>
-
 int heap_init(int key, int syn);
 
 void *malloc_1024();
