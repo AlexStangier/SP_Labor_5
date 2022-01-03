@@ -3,7 +3,8 @@
 #include "heap1024private.h"
 
 static int instanciated = FALSE;
-int semaphore;
+static int synchronized = FALSE;
+static int semaphore;
 struct managedheap *heap;
 extern int errno;
 
@@ -14,10 +15,11 @@ void error_and_die() {
 
 int heap_init(key_t key, int syn) {
     atexit(error_and_die);
-    int shmid;
+    int shmid = 0;
 
     //use semaphore
     if (syn == TRUE) {
+        synchronized = TRUE;
         //kill existing seamphore
         system("ipcrm -S 1338");
 
@@ -60,12 +62,15 @@ void *malloc_1024() {
     //find unused segment in heap
     for (int i = 0; i < SEGMENTS; i++) {
         if (heap->segments[i].is_used == FALSE) {
+            if(synchronized == TRUE) semop(semaphore, &sembuf_dec, 1);
             //perist process_id
             heap->segments[i].process_id = getpid();
             heap->segments[i].is_used = TRUE;
             heap->segments[i].ptr = (void *) heap->segments[i].segment;
 
             heap->counter_used_segments++;
+
+            if(synchronized == TRUE) semop(semaphore, &sembuf_inc, 1);
             return heap->segments[i].ptr;
         }
     }
@@ -75,9 +80,11 @@ void *malloc_1024() {
 void free_1024(void *addr) {
     for (int i = 0; i < SEGMENTS; i++) {
         if (heap->segments[i].ptr == addr) {
+            if(synchronized == TRUE) semop(semaphore, &sembuf_dec, 1);
             heap->counter_used_segments--;
             if (heap->segments[i].is_used == FALSE) heap->counter_free_errors++;
             heap->segments[i].is_freed = TRUE;
+            if(synchronized == TRUE) semop(semaphore, &sembuf_inc, 1);
         }
     }
 
