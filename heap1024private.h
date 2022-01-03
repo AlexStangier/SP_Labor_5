@@ -1,5 +1,5 @@
-#ifndef LAB5_HEAPMANAGERPRIVATE_H
-#define LAB5_HEAPMANAGERPRIVATE_H
+#ifndef LAB5_HEAP1024PRIVATE_H
+#define LAB5_HEAP1024PRIVATE_H
 
 #include <stdio.h>
 #include <sys/ipc.h>
@@ -10,7 +10,7 @@
 
 #define SHMKEY          1337
 #define SEMKEY          1338
-#define SEGMENTS        10000
+#define SEGMENTS        (10000/4)
 #define SEGMENTSIZE     1024
 #define TRUE            1
 #define FALSE           0
@@ -19,13 +19,15 @@ typedef struct segment_instace {
     int is_used;
     int is_freed;
     int process_id;
+    void* ptr;
     char segment[SEGMENTSIZE];  // bei free kommt pointer => pointer zu array element!
 } segment;
 
 typedef struct managedheap {
     int counter_used_segments;
+    int counter_free_errors;
     int shmid;
     segment segments[SEGMENTS];
 } mheap;
 
-#endif //LAB5_HEAPMANAGERPRIVATE_H
+#endif //LAB5_HEAP1024PRIVATE_H

@@ -1,6 +1,6 @@
 #include <sys/stat.h>
-#include "HeapManager.h"
-#include "HeapManagerPrivate.h"
+#include "heap1024.h"
+#include "heap1024private.h"
 
 static int instanciated = FALSE;
 int semaphore;
@@ -15,13 +15,11 @@ void error_and_die() {
 int heap_init(key_t key, int syn) {
     atexit(error_and_die);
     int shmid;
-    //mheap mheap;
-    printf("%lu\n", sizeof(mheap));
 
     //use semaphore
     if (syn == TRUE) {
         //kill existing seamphore
-        //system("ipcrm -S 1338");
+        system("ipcrm -S 1338");
 
         if ((semaphore = semget(SEMKEY, 1, IPC_CREAT | 0777)) == -1) {
             perror("Failed to get semaphore:\n");
@@ -32,14 +30,15 @@ int heap_init(key_t key, int syn) {
 
     if (instanciated == FALSE) {
         //allocate new shared memory
-        if ((shmid = shmget(key, sizeof(mheap), IPC_CREAT | 0666) == -1)) {
+        shmid = shmget(key, sizeof(mheap), IPC_CREAT | 0666);
+        if (shmid == -1) {
             perror("Failed to allocate shm: \n");
             return EXIT_FAILURE;
         }
         instanciated = TRUE;
 
         //attach to shm
-        if ((heap = (struct managedheap *) shmat(shmid, NULL, 0)) == (void *) -1) {
+        if ((heap = shmat(shmid, NULL, 0)) == (void *) -1) {
             perror("Failed to attach shm: \n");
             return EXIT_FAILURE;
         }
@@ -58,27 +57,33 @@ int heap_init(key_t key, int syn) {
 }
 
 void *malloc_1024() {
-    atexit(error_and_die);
     //find unused segment in heap
     for (int i = 0; i < SEGMENTS; i++) {
         if (heap->segments[i].is_used == FALSE) {
             //perist process_id
             heap->segments[i].process_id = getpid();
             heap->segments[i].is_used = TRUE;
+            heap->segments[i].ptr = (void *) heap->segments[i].segment;
+
             heap->counter_used_segments++;
-            return (void *) heap->segments[i].segment;
+            return heap->segments[i].ptr;
         }
     }
     return (void *) NULL;
 }
 
 void free_1024(void *addr) {
-    atexit(error_and_die);
-    //
+    for (int i = 0; i < SEGMENTS; i++) {
+        if (heap->segments[i].ptr == addr) {
+            heap->counter_used_segments--;
+            if (heap->segments[i].is_used == FALSE) heap->counter_free_errors++;
+            heap->segments[i].is_freed = TRUE;
+        }
+    }
+
 }
 
 int dbg_get_my_used_mem_count() {
-    atexit(error_and_die);
     int count = 0;
     int pid = getpid();
     for (int i = 0; i < heap->counter_used_segments; i++) {
@@ -91,7 +96,5 @@ int dbg_get_my_used_mem_count() {
 }
 
 int dbg_get_free_errors() {
-    atexit(error_and_die);
-
-    return 0;
+    return heap->counter_free_errors;;
 }
