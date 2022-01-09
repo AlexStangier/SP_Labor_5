@@ -5,27 +5,50 @@
 static int instanciated = FALSE;
 static int synchronized = FALSE;
 static int semaphore;
-struct managedheap *heap;
-extern int errno;
 
-void error_and_die() {
+struct managedheap *heap;
+
+void unlock() {
+    if (semop(semaphore, &sembuf_inc, 1) == -1)
+    {
+        perror("signal failed\n");
+        exit(1);
+    }
+}
+
+void lock() {
+    if (semop(semaphore, &sembuf_dec, 1) == -1)
+    {
+        perror("wait failed\n");
+        exit(1);
+    }
+}
+
+void exit_and_die() {
     shmdt(heap);
-    system("ipcrm -M 1337");
+//     system("ipcrm -a");
 }
 
 int heap_init(key_t key, int syn) {
-    atexit(error_and_die);
+    atexit(exit_and_die);
     int shmid = 0;
 
     //use semaphore
     if (syn == TRUE) {
         synchronized = TRUE;
-        //kill existing seamphore
-        system("ipcrm -S 1338");
 
-        if ((semaphore = semget(SEMKEY, 1, IPC_CREAT | 0777)) == -1) {
+        if ((semaphore = semget(SEMKEY, 1, IPC_CREAT | 0666)) == -1) {
             perror("Failed to get semaphore:\n");
-            printf("%d\n", errno);
+            return EXIT_FAILURE;
+        }
+
+        //init semaphore with 0
+        struct sembuf sem_operation[1]={0};
+        sem_operation[0].sem_op=1;
+        sem_operation[0].sem_num = 0;
+        int rc;
+        if ((rc = semop(semaphore, sem_operation, 1)) == -1) {
+            perror("Failed to control semaphore:\n");
             return EXIT_FAILURE;
         }
     }
@@ -60,42 +83,46 @@ int heap_init(key_t key, int syn) {
 
 void *malloc_1024() {
     //find unused segment in heap
-    for (int i = 0; i < SEGMENTS; i++) {
+    int i;
+    for (i = 0; i < SEGMENTS; i++) {
         if (heap->segments[i].is_used == FALSE) {
-            if(synchronized == TRUE) semop(semaphore, &sembuf_dec, 1);
-            //perist process_id
-            heap->segments[i].process_id = getpid();
+            if(synchronized == TRUE) lock();
+
             heap->segments[i].is_used = TRUE;
+            heap->segments[i].is_freed = FALSE;
             heap->segments[i].ptr = (void *) heap->segments[i].segment;
+            heap->segments[i].pid = getpid();
 
             heap->counter_used_segments++;
 
-            if(synchronized == TRUE) semop(semaphore, &sembuf_inc, 1);
-            return heap->segments[i].ptr;
+            if(synchronized == TRUE) unlock();
+            return heap->segments[i].segment;
         }
     }
     return (void *) NULL;
 }
 
 void free_1024(void *addr) {
-    for (int i = 0; i < SEGMENTS; i++) {
+    int i;
+    for (i = 0; i < SEGMENTS; i++) {
         if (heap->segments[i].ptr == addr) {
-            if(synchronized == TRUE) semop(semaphore, &sembuf_dec, 1);
+            if(synchronized == TRUE) lock();
+
             heap->counter_used_segments--;
             if (heap->segments[i].is_used == FALSE) heap->counter_free_errors++;
             heap->segments[i].is_freed = TRUE;
-            if(synchronized == TRUE) semop(semaphore, &sembuf_inc, 1);
+            heap->segments[i].is_used = FALSE;
+
+            if(synchronized == TRUE) unlock();
         }
     }
-
 }
 
 int dbg_get_my_used_mem_count() {
-    int count = 0;
-    int pid = getpid();
-    for (int i = 0; i < heap->counter_used_segments; i++) {
+    int count = 0, pid = getpid(), i = 0;
+    for (i = 0; i < SEGMENTSIZE; i++) {
         if (heap->segments[i].is_used == TRUE && heap->segments[i].is_freed == FALSE &&
-            heap->segments[i].process_id == pid) {
+            heap->segments[i].pid == pid) {
             count++;
         }
     }
